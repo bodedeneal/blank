@@ -22,6 +22,20 @@
     }
     #deathCount { top: 16px; }
     #timerDisplay { top: 54px; }
+    /* --- Added overlay for leaderboard --- */
+    #leaderboardOverlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 11;
+      background: rgba(34,34,34,0.75);
+      backdrop-filter: blur(8px) brightness(0.92);
+      animation: fadeInBG 0.7s;
+    }
+    @keyframes fadeInBG {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
     #leaderboard {
       position: absolute;
       left: 50%;
@@ -33,16 +47,45 @@
       font-size: 26px;
       border-radius: 16px;
       padding: 18px 36px 80px 36px;
-      z-index: 10;
+      z-index: 12; /* raised for overlay */
       box-shadow: 0 4px 16px #0008;
       display: none;
       text-align: center;
+      /* --- Indie look: more pop --- */
+      border: 3px solid #FFD700;
+      background: rgba(34,34,34,0.85);
+      animation: leaderboardPop 0.8s cubic-bezier(.68,-0.55,.27,1.55);
+    }
+    @keyframes leaderboardPop {
+      0% { transform: translateX(-50%) scale(0.7); opacity: 0; }
+      60% { transform: translateX(-50%) scale(1.1); opacity: 1; }
+      100% { transform: translateX(-50%) scale(1); opacity: 1; }
     }
     #leaderboard h2 {
       margin: 0 0 14px 0;
       font-size: 32px;
       color: #FFD700;
       text-shadow: 0 2px 8px #000c;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+    }
+    #leaderboard .trophy {
+      font-size: 32px;
+      vertical-align: middle;
+      animation: spinTrophy 2s infinite linear;
+    }
+    @keyframes spinTrophy {
+      0% { transform: rotate(-12deg);}
+      50% { transform: rotate(12deg);}
+      100% { transform: rotate(-12deg);}
+    }
+    #leaderboard .subtitle {
+      font-size: 18px;
+      color: #FFD70099;
+      margin-bottom: 10px;
+      font-style: italic;
     }
     #leaderboard ol {
       margin: 0;
@@ -51,7 +94,25 @@
     }
     #leaderboard li {
       margin-bottom: 7px;
-      font-size: 24px;
+      font-size: 22px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      word-break: break-word;
+      transition: transform 0.2s;
+    }
+    #leaderboard li.me {
+      color: #39FF14;
+      font-weight: bold;
+      text-shadow: 0 2px 8px #000c;
+      background: #FFD7001a;
+      border-radius: 8px;
+      padding: 2px 8px;
+      transform: scale(1.08);
+    }
+    #leaderboard li .icon {
+      font-size: 22px;
+      margin-right: 6px;
     }
     #startPanel {
       position: absolute;
@@ -88,22 +149,39 @@
       background: #FFD700;
       color: #222;
     }
-    #playAgainBtn {
+    /* --- Restart button replaces playAgainBtn --- */
+    #restartBtn {
       display: none;
-      position: absolute;
-      top: auto;
+      position: fixed;
       bottom: 42px;
       left: 50%;
       transform: translateX(-50%);
-      z-index: 30;
+      z-index: 15;
       font-size: 28px;
       padding: 10px 30px;
+      background: #222c;
+      color: #FFD700;
+      border: 2px solid #FFD700;
+      border-radius: 14px;
+      box-shadow: 0 2px 10px #000a;
+      cursor: pointer;
+      font-family: monospace;
+      transition: background 0.3s, color 0.3s, transform 0.18s;
     }
+    #restartBtn:hover {
+      background: #FFD700;
+      color: #222;
+      transform: scale(1.10);
+      box-shadow: 0 6px 28px #FFD7004a;
+    }
+    /* Indie font */
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap');
   </style>
 </head>
 <body>
   <div id="deathCount">Total Lightsaber Deaths: 0</div>
   <div id="timerDisplay">Time Left: 01:00</div>
+  <div id="leaderboardOverlay"></div> <!-- overlay added -->
   <div id="leaderboard"></div>
   <div id="startPanel">
     <h1>Spinning Lightsaber Death Game</h1>
@@ -135,7 +213,7 @@
     <br>
     <button id="startBtn">Start Game</button>
   </div>
-  <button id="playAgainBtn">Play Again</button>
+  <button id="restartBtn">Restart</button> <!-- replaces playAgainBtn -->
   <canvas id="dvdCanvas"></canvas>
   <script>
     // --- UI Color Picker Logic ---
@@ -172,9 +250,10 @@
     const deathCountDiv = document.getElementById('deathCount');
     const timerDisplay = document.getElementById('timerDisplay');
     const leaderboardDiv = document.getElementById('leaderboard');
+    const leaderboardOverlay = document.getElementById('leaderboardOverlay'); // new
     const startPanel = document.getElementById('startPanel');
     const startBtn = document.getElementById('startBtn');
-    const playAgainBtn = document.getElementById('playAgainBtn');
+    const restartBtn = document.getElementById('restartBtn'); // replaces playAgainBtn
     const playerNameInput = document.getElementById('playerName');
     const playerColorInput = document.getElementById('playerColor');
     const gameTimeInput = document.getElementById('gameTime');
@@ -301,11 +380,12 @@
       const { style, colors } = getPlayerBladeColorsAndStyle();
       playerBladeStyle = style;
       playerColors = colors;
+      /* --- MORE COMPETITION: spawn more blades --- */
       blades = [
         makeBlade(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, 0, 0, 0.08, 70, true, "player", style, colors)
-      ].concat(spawnBlades(10, Math.min(WORLD_WIDTH, WORLD_HEIGHT) / 3));
+      ].concat(spawnBlades(16, Math.min(WORLD_WIDTH, WORLD_HEIGHT) / 3));
       dots = [];
-      for (let i = 0; i < 12; i++) {
+      for (let i = 0; i < 15; i++) {
         dots.push({
           x: Math.random() * (WORLD_WIDTH - 30) + 15,
           y: Math.random() * (WORLD_HEIGHT - 30) + 15,
@@ -325,24 +405,28 @@
     }
 
     // --- UI Logic ---
-    function showGameButtons(startPanelVisible, playAgainVisible) {
+    function showGameButtons(startPanelVisible, restartVisible) {
       startPanel.style.display = startPanelVisible ? "" : "none";
-      playAgainBtn.style.display = playAgainVisible ? "" : "none";
+      restartBtn.style.display = restartVisible ? "" : "none";
     }
     startBtn.onclick = () => {
       playerName = playerNameInput.value.trim() || "Player";
       showGameButtons(false, false);
       leaderboardDiv.style.display = "none";
+      leaderboardOverlay.style.display = "none";
       deathCountDiv.style.display = "";
       timerDisplay.style.display = "";
+      document.body.style.background = "#222";
       initGameVars();
       animate();
     };
-    playAgainBtn.onclick = () => {
+    restartBtn.onclick = () => {
       showGameButtons(false, false);
       leaderboardDiv.style.display = "none";
+      leaderboardOverlay.style.display = "none";
       deathCountDiv.style.display = "";
       timerDisplay.style.display = "";
+      document.body.style.background = "#222";
       initGameVars();
       animate();
     };
@@ -682,7 +766,7 @@
           timerDisplay.textContent = "Game Over";
           deathCountDiv.style.display = "none";
           timerDisplay.style.display = "none";
-          showLeaderboard();
+          showLeaderboard(); // changed for overlay
           return;
         }
       }
@@ -847,7 +931,11 @@
       requestAnimationFrame(animate);
     }
 
+    /* --- Leaderboard with overlay and more stats --- */
     function showLeaderboard() {
+      leaderboardOverlay.style.display = "block";
+      document.body.style.background = "rgba(34,34,34,0.82)";
+
       let bladeKillArr = [];
       for (let id in globalKillMap) {
         bladeKillArr.push({
@@ -865,18 +953,34 @@
       bladeKillArr.forEach(b => {
         dedupKillMap[b.id] = Math.max(dedupKillMap[b.id] || 0, b.kills);
       });
+
       let sortedBlades = Object.entries(dedupKillMap).map(([id, kills]) => {
         let blade = blades.find(b => b.id == id);
         let display = blade ? getBladeDisplay(blade) : ("Blade#" + id);
-        return { display, kills };
+        let isMe = blade && blade.isPlayer;
+        return { display, kills, isMe };
       }).sort((a, b) => b.kills - a.kills);
 
+      function iconForRank(r) {
+        if (r === 0) return `<span class="icon trophy">🏆</span>`;
+        if (r === 1) return `<span class="icon">🥈</span>`;
+        if (r === 2) return `<span class="icon">🥉</span>`;
+        return '';
+      }
+
+      let topN = 5;
       leaderboardDiv.innerHTML =
-        `<h2>Top 3 Killers</h2>
-         <ol>${sortedBlades.slice(0, 3).map(b =>
-          `<li>${b.display}: ${b.kills} lightsabers killed</li>`
+        `<h2><span class="trophy">🏆</span> Game Over! <span class="trophy">🏆</span></h2>
+         <div class="subtitle">Top ${topN} Lightsaber Killers</div>
+         <ol>${sortedBlades.slice(0, topN).map((b, idx) =>
+          `<li${b.isMe ? ' class="me"' : ''}>
+            ${iconForRank(idx)}${b.display}: <b>${b.kills}</b> lightsabers destroyed
+          </li>`
         ).join('')}
-         </ol>`;
+         </ol>
+         <div style="margin-top:16px;color:#FFD700b0;font-size:18px;">
+           ${sortedBlades[0] && sortedBlades[0].isMe ? "YOU are the Jedi Master! 🌟" : "Better luck next time, Jedi!"}
+         </div>`;
       leaderboardDiv.style.display = "block";
       showGameButtons(false, true);
     }
@@ -935,6 +1039,7 @@
     deathCountDiv.style.display = "none";
     timerDisplay.style.display = "none";
     leaderboardDiv.style.display = "none";
+    leaderboardOverlay.style.display = "none";
   </script>
 </body>
 </html>
